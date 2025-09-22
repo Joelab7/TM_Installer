@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+  develop-eggs/
+  dist/
+  downloads/
+  eggs/
+  .eggs/
+  lib/
+  lib64/
+  parts/
+  sdist/
+  var/
+  wheels/
+  *.egg-info/
+  .installed.cfg
+  *.egg
+
+# Environnements virtuels
+venv/
+env/
+.venv/
+#.env
+
+# Fichiers de session
+*.session
+*.session-journal
+
+# Fichiers de configuration locaux
+#*.ini
+*.log
+*.db
+
+# Dossiers de cache
+cache/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
