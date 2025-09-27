@@ -80,7 +80,7 @@ class InstallerApp:
         
         ttk.Checkbutton(
             options_frame, 
-            text="Create a Python launcher(TM) on the desktop to launch Telegram Manager(it is recommended)",
+            text="Create a shortcut on the desktop(it is recommended)",
             variable=self.create_desktop_shortcut
         ).pack(anchor='w', pady=2)
         
@@ -283,7 +283,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 shortcut.WindowStyle = 0  # 0 = Caché
                 
                 # Chemin de l'icône pour Telegram Manager
-                icon_path = os.path.join(target_dir, 'setup', 'src', 'telegram_manager', 'resources', 'icons', 'app_icon')
+                icon_path = os.path.join(target_dir, 'setup', 'src', 'telegram_manager', 'resources', 'icons', 'app_icon.ico')
                 
                 if os.path.exists(icon_path):
                     try:
@@ -688,20 +688,20 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                                     # Créer le raccourci
                                     shortcut_created = self.create_shortcut(
                                         os.path.join(install_dir, 'launch.py'),
-                                        'Python launcher(TM)',
+                                        'Telegram Manager',
                                         public_desktop
                                     )
                                     
                                     if shortcut_created:
-                                        print("[DEBUG] The Python launcher(TM) has been created on the desktop")
-                                        success_msg += "\n- The Python launcher(TM) has been created on the desktop"
+                                        print("[DEBUG] A shortcut has been created on the desktop")
+                                        success_msg += "\n- A shortcut has been created on the desktop"
                                     else:
-                                        raise Exception("Failed to create shortcut(Python launcher(TM))")
+                                        raise Exception("Failed to create shortcut(Telegram Manager)")
                                         
                                 except Exception as e:
-                                    error_msg = f"[ERROR] Failed to create shortcut(Python launcher(TM)) on the desktop: {e}"
+                                    error_msg = f"[ERROR] Failed to create shortcut(Telegram Manager) on the desktop: {e}"
                                     print(error_msg)
-                                    success_msg += "\n- Failed to create shortcut(Python launcher(TM)) on the desktop"
+                                    success_msg += "\n- Failed to create shortcut(Telegram Manager) on the desktop"
                             
                             # Le raccourci du menu Démarrer a été supprimé de cette version
                             

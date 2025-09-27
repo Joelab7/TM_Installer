@@ -98,8 +98,8 @@ def get_desktop_shortcut():
     
     # Noms possibles du raccourci (avec et sans extension .lnk)
     possible_names = [
-        'Python launcher(TM)',
-        'Python launcher(TM).lnk',
+        'Telegram Manager',
+        'Telegram Manager.lnk'
         'TM',
         'TM.lnk'
     ]
