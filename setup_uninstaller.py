@@ -21,7 +21,7 @@ def get_install_dirs():
     print("\n[DEBUG] Searching for all valid installation directories...")
     
     # List of possible folder names
-    possible_folder_names = ['Telegram Manager(French installer)', 'Telegram Manager', 'TG_MANAGER']
+    possible_folder_names = ['Telegram Manager(Installer)', 'Telegram Manager', 'TG_MANAGER']
     
     # List of possible locations
     possible_paths = []
