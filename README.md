@@ -2,7 +2,7 @@
 
 - Telegram Manager is a comprehensive application for managing Telegram group, channel, chat and bot identifiers with an intuitive user interface. One of its best management tools is "Members Manager".
 - **Members Manager**: Powerful member management program tailored to add members respecting Telegram standards, limitations, and permissions.
-⚠ Important: Members Manager is a paid tool via license key renewable every month at the end of the subscription period, to use Members Manager for free you can use your 14 days of free trial. 
+⚠ Important: Members Manager is a paid tool via license key renewable every month at the end of the subscription period, to use Members Manager for free you can use your 7 days of free trial. 
 
 
 ## Key features

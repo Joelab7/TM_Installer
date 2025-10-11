@@ -17,13 +17,13 @@ def is_admin():
         return False
 
 def get_install_dirs():
-    """Returns all valid installation directories"""
+    """Retourne tous les répertoires d'installation valides"""
     print("\n[DEBUG] Searching for all valid installation directories...")
     
-    # List of possible folder names
-    possible_folder_names = ['Telegram Manager(Installer)', 'Telegram Manager', 'TG_MANAGER']
+    # Liste des noms de dossiers possibles
+    possible_folder_names = ['Telegram Manager(English installer)', 'Telegram Manager', 'TG_MANAGER']
     
-    # List of possible locations
+    # Liste des emplacements possibles
     possible_paths = []
     
     # Ajouter les chemins pour chaque nom de dossier possible
@@ -57,7 +57,7 @@ def get_install_dirs():
     
     found_paths = []
     
-    # Verify in the Windows registry
+    # Vérifier dans le registre Windows
     try:
         print("\n[DEBUG] Verifying Windows registry...")
         reg_paths = [
@@ -78,13 +78,13 @@ def get_install_dirs():
     except Exception as e:
         print(f"[DEBUG] Error verifying registry: {e}")
     
-    # Verify possible directories
+    # Vérifier les dossiers possibles
     print("\n[DEBUG] Verifying directories...")
     for path in possible_paths:
         try:
             if os.path.exists(path):
                 print(f"[DEBUG] Directory found: {path}")
-                # Verify if it's a valid installation
+                # Vérifier si c'est bien une installation valide
                 required_files = ['launch.py', 'setup_installer.py']
                 if all(os.path.exists(os.path.join(path, f)) for f in required_files):
                     print(f"[DEBUG] Valid installation detected in: {path}")
@@ -99,15 +99,15 @@ def get_install_dirs():
     return found_paths
 
 def get_desktop_shortcut():
-    """Find the shortcut on the desktop"""
+    """Trouve le raccourci sur le bureau"""
     print("\n[DEBUG] Searching for desktop shortcut...")
     
-    # Possible names of the shortcut (with and without .lnk extension)
+    # Noms possibles du raccourci (avec et sans extension .lnk)
     possible_names = [
         'Telegram Manager',
         'Telegram Manager.lnk',
-        'Telegram Manager(French version)',
-        'Telegram Manager(French version).lnk',
+        'TM',
+        'TM.lnk',
     ]
     
     # Emplacements possibles du bureau
@@ -118,44 +118,92 @@ def get_desktop_shortcut():
         os.path.join(os.environ.get('PUBLIC', ''), 'Bureau')
     ]
     
-    print("[DEBUG] Checking desktop locations:")
+    print("[DEBUG] Desktop locations to check:")
     for path in desktop_paths:
         print(f"  - {path}")
         
-        # Check if the path exists
+        # Vérifier si le chemin existe
         if not os.path.exists(path):
             print(f"    [DEBUG] Directory does not exist: {path}")
             continue
             
-        # List all files in the directory
+        # Lister tous les fichiers dans le dossier
         try:
             files = os.listdir(path)
             print(f"    [DEBUG] Files found in {path}:")
             for f in files:
                 print(f"      - {f}")
                 
-                # Verify if the file matches any of the names
+                # Vérifier si le fichier correspond à un des noms recherchés
                 for name in possible_names:
                     if f.lower() == name.lower() or f.lower() == name.lower() + '.lnk':
                         full_path = os.path.join(path, f)
                         print(f"    [DEBUG] Match found: {full_path}")
                         return full_path
         except Exception as e:
-            print(f"    [DEBUG] Error listing files in {path}: {e}")
+            print(f"    [ERROR] Unable to list files in {path}: {e}")
     
     print("[DEBUG] No matching shortcut found in desktop directories")
+    return None
+
+def get_start_menu_shortcut():
+    """Trouve le raccourci dans le menu Démarrer"""
+    print("\n[DEBUG] Searching for shortcut in Start menu...")
+
+    # Noms possibles du raccourci (avec et sans extension .lnk)
+    possible_names = [
+        'Telegram Manager',
+        'Telegram Manager.lnk',
+        'TM',
+        'TM.lnk',
+    ]
+
+    # Emplacements possibles du menu Démarrer
+    start_menu_paths = [
+        os.path.join(os.environ.get('ALLUSERSPROFILE', ''), r'Microsoft\Windows\Start Menu\Programs'),
+        os.path.join(os.environ.get('PROGRAMDATA', ''), r'Microsoft\Windows\Start Menu\Programs'),
+        os.path.join(os.environ.get('USERPROFILE', ''), r'AppData\Roaming\Microsoft\Windows\Start Menu\Programs'),
+    ]
+
+    print("[DEBUG] Start menu paths to check:")
+    for path in start_menu_paths:
+        print(f"  - {path}")
+
+        # Vérifier si le chemin existe
+        if not os.path.exists(path):
+            print(f"    [DEBUG] Directory does not exist: {path}")
+            continue
+
+        # Lister tous les fichiers dans le dossier
+        try:
+            files = os.listdir(path)
+            print(f"    [DEBUG] Files found in {path}:")
+            for f in files:
+                print(f"      - {f}")
+
+                # Vérifier si le fichier correspond à un des noms recherchés
+                for name in possible_names:
+                    if f.lower() == name.lower() or f.lower() == name.lower() + '.lnk':
+                        full_path = os.path.join(path, f)
+                        print(f"    [DEBUG] Match found: {full_path}")
+                        return full_path
+        except Exception as e:
+            print(f"    [ERREUR] Impossible de lister les fichiers dans {path}: {e}")
+
+    print("[DEBUG] No matching shortcut found in Start menu directories")
     return None
 
 class UninstallerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Uninstall Telegram Manager")
-        self.root.geometry("800x600")  # Increased size to display multiple paths
+        self.root.title("Uninstallation of Telegram Manager")
+        self.root.geometry("800x600")  # Taille augmentée pour afficher plusieurs chemins
         self.root.resizable(False, False)
         
         # Variables
-        self.install_dirs = []  # List of all installation directories
+        self.install_dirs = []  # Liste de tous les dossiers d'installation
         self.desktop_shortcut = ""
+        self.start_menu_shortcut = ""
         self.uninstall_complete = False
         
         # Style
@@ -235,7 +283,7 @@ class UninstallerApp:
         # Forcer le fond blanc pour ce LabelFrame aussi
         self.dirs_frame.configure(style='White.TLabelframe')
         
-        # Label for indicating detection in progress
+        # Label pour indiquer la détection en cours
         self.dirs_label = ttk.Label(
             self.dirs_frame, 
             text="Detection of installation directories in progress...",
@@ -262,7 +310,18 @@ class UninstallerApp:
         )
         self.shortcut_label.pack(anchor='w', pady=2)
         
-        # Progress bar
+        # Section pour le raccourci du menu Démarrer
+        self.start_menu_frame = ttk.Frame(info_frame)
+        self.start_menu_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        self.start_menu_label = ttk.Label(
+            self.start_menu_frame, 
+            text="Start menu shortcut : Not detected",
+            style='Status.TLabel'
+        )
+        self.start_menu_label.pack(anchor='w', pady=2)
+        
+        # Barre de progression
         progress_frame = ttk.Frame(main_frame)
         progress_frame.pack(fill=tk.X, pady=(20, 10))
         
@@ -275,7 +334,7 @@ class UninstallerApp:
         )
         self.progress.pack(fill=tk.X, expand=True, pady=5)
         
-        # Status with blue color
+        # Statut avec couleur bleue
         self.status_var = tk.StringVar(value="Ready to uninstall")
         status_label = ttk.Label(
             main_frame,
@@ -304,7 +363,7 @@ class UninstallerApp:
             command=self.root.quit
         ).pack(side=tk.RIGHT)
         
-        # Style for modern blue buttons
+        # Style pour les boutons modernes bleus
         style.configure('Accent.TButton',
                            font=('Segoe UI', 10, 'bold'),
                            background='#1976D2',  # Bleu moderne pour le bouton principal
@@ -333,35 +392,50 @@ class UninstallerApp:
         style.map('TButton', bordercolor=[('focus', '#1976D2'), ('!focus', '#1976D2')])
     
     def detect_components(self):
-        """Detects the components to uninstall"""
+        """Détecte les composants à désinstaller"""
         print("\n[DEBUG] Detection of components to uninstall...")
         
-        # Detect installation directories
+        # Détecter les répertoires d'installation
         self.install_dirs = get_install_dirs()
         
-        # Update interface with detected directories
+        # Mettre à jour l'interface avec les dossiers trouvés
         self.update_dirs_ui()
         
-        # Detect desktop shortcut
+        # Détecter le raccourci sur le bureau
         self.desktop_shortcut = get_desktop_shortcut()
         if self.desktop_shortcut:
             print(f"[DEBUG] Desktop shortcut detected: {self.desktop_shortcut}")
             self.shortcut_label.config(
                 text=f"Desktop shortcut : {os.path.basename(self.desktop_shortcut)}",
-                foreground='#4FC3F7'  # Blue instead of green/red
+                foreground='#4FC3F7'  # Bleu au lieu de vert/rouge
             )
         else:
-            print("[DEBUG] No desktop shortcut detected")
+            print("[DEBUG] No desktop shortcut found")
             self.shortcut_label.config(
                 text="Desktop shortcut : Not detected (may already be deleted)",
-                foreground='#4FC3F7'  # Blue instead of orange
+                foreground='#4FC3F7'  # Bleu au lieu d'orange
             )
         
-        # Update uninstall button state
-        if not self.install_dirs and not self.desktop_shortcut:
+        # Détecter le raccourci du menu Démarrer
+        self.start_menu_shortcut = get_start_menu_shortcut()
+        if self.start_menu_shortcut:
+            print(f"[DEBUG] Start menu shortcut detected: {self.start_menu_shortcut}")
+            self.start_menu_label.config(
+                text=f"Start menu shortcut : {os.path.basename(self.start_menu_shortcut)}",
+                foreground='#4FC3F7'  # Bleu au lieu de vert/rouge
+            )
+        else:
+            print("[DEBUG] No start menu shortcut found")
+            self.start_menu_label.config(
+                text="Start menu shortcut : Not detected (may already be deleted)",
+                foreground='#4FC3F7'  # Bleu au lieu d'orange
+            )
+        
+        # Mettre à jour l'état du bouton de désinstallation
+        if not self.install_dirs and not self.desktop_shortcut and not self.start_menu_shortcut:
             self.uninstall_btn.config(state=tk.DISABLED)
             self.status_var.set(
-                "No Telegram Manager components found on this system. "
+                "No Telegram Manager component found on this system. "
                 "The application may already be uninstalled."
             )
         else:
@@ -378,17 +452,17 @@ class UninstallerApp:
         
         if not self.install_dirs:
             self.dirs_label.config(
-                text="No installation directories found (may already be uninstalled)",
-                foreground='#4FC3F7'  # Blue instead of orange
+                text="No installation directory found (may already be uninstalled)",
+                foreground='#4FC3F7'  # Bleu au lieu d'orange
             )
             return
         
         self.dirs_label.config(
-            text="Select the directories to remove :",
+            text="Check the directories to delete :",
             foreground='black'
         )
         
-        # Add a checkbox for each directory
+        # Ajouter une case à cocher pour chaque dossier
         for i, dir_path in enumerate(self.install_dirs):
             var = tk.BooleanVar(value=True)
             self.dir_vars[dir_path] = var
@@ -414,7 +488,7 @@ class UninstallerApp:
             )
             label.pack(side=tk.LEFT, fill=tk.X, expand=True, anchor='w')
             
-            # Button to open explorer
+            # Bouton pour ouvrir l'explorateur
             btn = ttk.Button(
                 dir_frame,
                 text="Open",
@@ -442,13 +516,21 @@ class UninstallerApp:
     def run_uninstall(self):
         """Exécute la désinstallation"""
         try:
-            # Step 1: Remove the desktop shortcut
+            # Étape 1: Supprimer le raccourci du bureau
             if self.desktop_shortcut and os.path.exists(self.desktop_shortcut):
                 self.update_status("Removing desktop shortcut...", 10)
                 try:
                     os.remove(self.desktop_shortcut)
                 except Exception as e:
-                    self.update_status(f"Warning: Could not remove desktop shortcut: {e}")
+                    self.update_status(f"Warning: Impossible to remove the desktop shortcut: {e}")
+            
+            # Étape 1.5: Supprimer le raccourci du menu Démarrer
+            if self.start_menu_shortcut and os.path.exists(self.start_menu_shortcut):
+                self.update_status("Removing start menu shortcut...", 15)
+                try:
+                    os.remove(self.start_menu_shortcut)
+                except Exception as e:
+                    self.update_status(f"Warning: Impossible to remove the start menu shortcut: {e}")
             
             # Étape 2: Supprimer les répertoires d'installation sélectionnés
             selected_dirs = self.get_selected_dirs()
@@ -456,7 +538,7 @@ class UninstallerApp:
             
             if total_dirs > 0:
                 for i, install_dir in enumerate(selected_dirs, 1):
-                    progress = 10 + int((i / (total_dirs + 1)) * 80)  # 10-90% for directory deletion
+                    progress = 20 + int((i / (total_dirs + 1)) * 75)  # 20-95% pour la suppression des dossiers
                     self.update_status(f"Removing installation directory ({i}/{total_dirs}): {install_dir}", progress)
                     
                     if not os.path.exists(install_dir):
@@ -478,7 +560,7 @@ class UninstallerApp:
                                 
                             # Si le dossier existe encore, forcer la suppression des fichiers/dossiers en lecture seule
                             if attempt == 0:
-                                self.update_status("Deleting files in read-only mode...", progress)
+                                self.update_status("Deleting read-only files...", progress)
                                 for root, dirs, files in os.walk(install_dir, topdown=False):
                                     for name in files:
                                         file_path = os.path.join(root, name)
@@ -486,7 +568,7 @@ class UninstallerApp:
                                             os.chmod(file_path, 0o777)  # Donner tous les droits
                                             os.unlink(file_path)  # Supprimer le fichier
                                         except Exception as e:
-                                            print(f"Could not delete {file_path}: {e}")
+                                            print(f"Impossible to delete {file_path}: {e}")
                                     
                                     for name in dirs:
                                         dir_path = os.path.join(root, name)
@@ -494,7 +576,7 @@ class UninstallerApp:
                                             os.chmod(dir_path, 0o777)  # Donner tous les droits
                                             os.rmdir(dir_path)  # Supprimer le dossier vide
                                         except Exception as e:
-                                            print(f"Could not delete the directory {dir_path}: {e}")
+                                            print(f"Impossible to delete the directory {dir_path}: {e}")
                             
                             # Dernière tentative avec suppression forcée
                             if attempt == max_attempts - 1 and os.path.exists(install_dir):
@@ -545,25 +627,25 @@ class UninstallerApp:
                                                   0, winreg.KEY_SET_VALUE)
                                 winreg.SetValueEx(key, f"DeleteOldInstall_{i}", 0, winreg.REG_SZ, f'"{bat_path}"')
                                 winreg.CloseKey(key)
-                                self.update_status("Final cleanup will occur on next startup.", progress)
+                                self.update_status("The final cleanup will be performed at the next startup.", progress)
                             except Exception as e:
-                                print(f"Failed to schedule deletion: {e}")
-                                raise Exception(f"Failed to delete installation directory. Please restart your computer and manually delete the directory: {install_dir}")
+                                print(f"Failed to schedule the cleanup: {e}")
+                                raise Exception(f"Failed to delete the installation directory. Please restart your computer and manually delete the directory: {install_dir}")
                         except Exception as e:
-                            print(f"Failed to schedule deletion: {e}")
-                            raise Exception(f"Failed to delete installation directory. Please restart your computer and manually delete the directory: {install_dir}")
+                            print(f"Error scheduling the cleanup: {e}")
+                            raise Exception(f"Failed to delete the installation directory. Please restart your computer and manually delete the directory: {install_dir}")
             
-            # Step 3: Clean up the registry
-            self.update_status("Cleaning up registry...", 95)
+            # Étape 3: Nettoyer le registre
+            self.update_status("Cleaning up the registry...", 95)
             try:
-                # Remove the uninstall key
+                # Supprimer la clé de désinstallation
                 try:
                     winreg.DeleteKey(winreg.HKEY_CURRENT_USER, 
                                    r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TelegramManager")
                 except WindowsError:
                     pass
                 
-                # Try as administrator if possible
+                # Essayer en tant qu'administrateur si possible
                 if is_admin():
                     try:
                         winreg.DeleteKey(winreg.HKEY_LOCAL_MACHINE, 
@@ -576,20 +658,20 @@ class UninstallerApp:
                     except WindowsError:
                         pass
             except Exception as e:
-                self.update_status(f"Warning: Could not clean up registry: {e}")
+                self.update_status(f"Warning: Unable to clean up the registry: {e}")
             
-            # Completed
+            # Terminé
             self.update_status("Uninstallation completed successfully!", 100)
             self.uninstall_complete = True
             
-            # Change the button to quit
+            # Changer le bouton pour quitter
             self.uninstall_btn.config(
                 text="Finish",
                 command=self.root.quit,
                 state=tk.NORMAL
             )
             
-            # Show confirmation message
+            # Afficher un message de confirmation
             messagebox.showinfo(
                 "Uninstallation completed",
                 "Telegram Manager has been successfully uninstalled from your computer."
@@ -604,9 +686,9 @@ class UninstallerApp:
             self.uninstall_btn.config(state=tk.NORMAL)
 
 def main():
-    # Check for administrator privileges
+    # Vérifier les droits administrateur
     if not is_admin():
-        # Restart with elevation
+        # Relancer avec élévation des privilèges
         try:
             ctypes.windll.shell32.ShellExecuteW(
                 None, "runas", sys.executable, " \"" + os.path.abspath(__file__) + "\"", None, 1
@@ -621,6 +703,26 @@ def main():
     
     # Launch the GUI
     root = tk.Tk()
+    
+    # Définir l'icône de l'application
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(script_dir, 'app_icon.ico')
+    if os.path.exists(icon_path):
+        try:
+            # Méthode principale
+            root.iconbitmap(icon_path)
+            root.wm_iconbitmap(icon_path)
+
+            # Méthode alternative avec ctypes pour forcer l'icône
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("TelegramManager.Uninstaller")
+                root.tk.call('wm', 'iconphoto', root._w, tk.PhotoImage(file=icon_path))
+            except Exception as e:
+                pass  # Ignorer les erreurs d'icône
+        except Exception as e:
+            pass  # Ignorer les erreurs d'icône
+    
     app = UninstallerApp(root)
     root.mainloop()
 

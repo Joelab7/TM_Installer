@@ -63,7 +63,7 @@ class InstallerApp:
         dir_frame = ttk.Frame(content)
         dir_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Label(dir_frame, text="Installation Directory :").pack(anchor='w')
+        ttk.Label(dir_frame, text="Installation directory :").pack(anchor='w')
         
         dir_entry_frame = ttk.Frame(dir_frame)
         dir_entry_frame.pack(fill=tk.X, pady=5)
@@ -74,8 +74,8 @@ class InstallerApp:
         browse_btn = ttk.Button(dir_entry_frame, text="Browse...", command=self.browse_directory)
         browse_btn.pack(side=tk.RIGHT, padx=(5, 0))
         
-        # Installation Options
-        options_frame = ttk.LabelFrame(content, text="Installation Options", padding=10)
+        # Options d'installation
+        options_frame = ttk.LabelFrame(content, text="Installation options", padding=10)
         options_frame.pack(fill=tk.X, pady=10)
         
         ttk.Checkbutton(
@@ -260,11 +260,11 @@ class InstallerApp:
             windll.shell32.SHGetFolderPathW(None, CSIDL_DESKTOP, None, SHGFP_TYPE_CURRENT, buf)
             
             desktop_path = buf.value
-            print(f"[DEBUG] Detected desktop path: {desktop_path}")
+            print(f"[DEBUG] Desktop path detected: {desktop_path}")
             return desktop_path
             
         except Exception as e:
-            print(f"[ERROR] Unable to detect the desktop path: {e}")
+            print(f"[ERROR] Failed to detect desktop path: {e}")
             # Fallback sur les chemins standards
             user_profile = os.path.expanduser('~')
             for path in [os.path.join(user_profile, 'Bureau'), 
@@ -275,16 +275,36 @@ class InstallerApp:
                     return path
             return user_profile  # Dernier recours
             
-    def _create_batch_file(self, target_dir, name):
-        """Crée un fichier batch pour lancer l'application en arrière-plan."""
-        batch_content = f"""@echo off
-start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
-"""
-        batch_path = os.path.join(target_dir, f"{name}.bat")
-        with open(batch_path, 'w', encoding='utf-8') as f:
-            f.write(batch_content)
-        return batch_path
-
+    def _get_start_menu_path(self):
+        """Récupère le chemin du menu Démarrer en fonction de la langue du système."""
+        try:
+            import ctypes
+            from ctypes import wintypes, windll
+            
+            # Utiliser SHGetFolderPath pour obtenir le vrai chemin du menu Démarrer
+            CSIDL_PROGRAMS = 2  # Menu Démarrer (Tous les utilisateurs)
+            SHGFP_TYPE_CURRENT = 0  # Récupérer le chemin actuel, pas la valeur par défaut
+            
+            buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+            windll.shell32.SHGetFolderPathW(None, CSIDL_PROGRAMS, None, SHGFP_TYPE_CURRENT, buf)
+            
+            start_menu_path = buf.value
+            print(f"[DEBUG] Start menu path detected: {start_menu_path}")
+            return start_menu_path
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to detect start menu path: {e}")
+            # Fallback sur les chemins standards
+            all_users_profile = os.environ.get('ALLUSERSPROFILE', '')
+            for path in [
+                os.path.join(all_users_profile, r'Microsoft\Windows\Start Menu\Programs'),
+                os.path.join(os.environ.get('PROGRAMDATA', ''), r'Microsoft\Windows\Start Menu\Programs')
+            ]:
+                if os.path.isdir(path):
+                    print(f"[DEBUG] Using fallback path: {path}")
+                    return path
+            return os.path.join(all_users_profile, r'Microsoft\Windows\Start Menu\Programs')  # Dernier recours
+            
     def create_shortcut(self, target, name, directory):
         """Crée un raccourci Windows qui demande l'élévation des privilèges."""
         try:
@@ -293,10 +313,6 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
             import ctypes
             import sys
             import os
-            
-            # Créer le fichier batch
-            target_dir = os.path.dirname(target)
-            batch_path = self._create_batch_file(target_dir, name)
             
             # Créer le chemin complet du raccourci
             shortcut_path = os.path.join(directory, f"{name}.lnk")
@@ -309,7 +325,8 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 shell = Dispatch('WScript.Shell')
                 shortcut = shell.CreateShortCut(shortcut_path)
                 
-                # Configurer le raccourci pour exécuter avec pythonw.exe (sans console)
+                # Obtenir les chemins nécessaires
+                target_dir = os.path.dirname(target)
                 setup_src_path = os.path.join(target_dir, "setup", "src")
                 pythonw_exe = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
                 
@@ -317,7 +334,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 if not os.path.exists(pythonw_exe):
                     pythonw_exe = sys.executable
                     
-                # Configurer le raccourci
+                # Configurer le raccourci pour exécuter directement pythonw.exe avec les arguments
                 shortcut.TargetPath = pythonw_exe
                 shortcut.Arguments = f'"{os.path.join(setup_src_path, "main.py")}"'
                 shortcut.WorkingDirectory = setup_src_path
@@ -346,7 +363,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                             app.quit()
                             
                     except Exception as e:
-                        print(f"[WARNING] Unable to load icon with QMainWindow: {e}")
+                        print(f"[WARNING] Failed to load icon with QMainWindow: {e}")
                         # Fallback vers la méthode standard
                         shortcut.IconLocation = f"{os.path.abspath(icon_path)},0"
                 else:
@@ -381,13 +398,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                     persist_file.Save(shortcut_path, True)
                     
                 except Exception as e:
-                    print(f"[WARNING] Unable to force elevation of shortcut: {e}")
-                
-                # Cacher le fichier batch
-                try:
-                    ctypes.windll.kernel32.SetFileAttributesW(batch_path, 0x02)  # FILE_ATTRIBUTE_HIDDEN
-                except:
-                    pass
+                    print(f"[WARNING] Unable to force elevation: {e}")
                 
                 return True
                 
@@ -396,7 +407,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 pythoncom.CoUninitialize()
                 
         except Exception as e:
-            print(f"[ERROR] Unable to create shortcut {name}: {e}")
+            print(f"[WARNING] Failed to create shortcut {name}: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -416,16 +427,16 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 "Installation Error",
                 f"{error_msg}\n\n"
                 "Please install Git from https://git-scm.com/download/win\n"
-                "and make sure it is properly added to your PATH."
+                "and verify that it is added to your PATH."
             )
             return False
         
         try:
-            # Vérifier si le répertoire cible existe déjà avec un installateur
-            print(f"[DEBUG] Verifying the target directory: {target_dir}")
+            # Check if the target directory already exists with an installer
+            print(f"[DEBUG] Checking target directory: {target_dir}")
             if os.path.exists(target_dir):
                 setup_path = os.path.join(target_dir, 'setup_installer.py')
-                print(f"[DEBUG] Verifying the existence of {setup_path}")
+                print(f"[DEBUG] Checking existence of {setup_path}")
                 if os.path.exists(setup_path):
                     print("[DEBUG] Installation already present, returning True")
                     return True  # Installation déjà présente
@@ -434,23 +445,23 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 # car le répertoire de téléchargement est déjà un emplacement valide
                 pass
             
-            # Créer le répertoire parent s'il n'existe pas
-            print(f"[DEBUG] Creating the target directory: {target_dir}")
+            # Create the parent directory if it doesn't exist
+            print(f"[DEBUG] Creating target directory: {target_dir}")
             os.makedirs(target_dir, exist_ok=True)
             
-            # Vérifier que le répertoire est accessible en écriture
+            # Verify that the directory is writable
             test_file = os.path.join(target_dir, 'test_write.tmp')
             try:
                 with open(test_file, 'w') as f:
                     f.write('test')
                 os.remove(test_file)
-                print(f"[DEBUG] The directory {target_dir} is writable")
+                print(f"[DEBUG] Directory {target_dir} is writable")
                 
-                # Create a subfolder 'TelegramManager' if it doesn't exist
+                # Create a subdirectory 'TelegramManager' if it doesn't exist
                 if not target_dir.endswith('Telegram Manager'):
                     target_dir = os.path.join(target_dir, 'Telegram Manager')
                     os.makedirs(target_dir, exist_ok=True)
-                    print(f"[DEBUG] Using subfolder: {target_dir}")
+                    print(f"[DEBUG] Using subdirectory: {target_dir}")
                 
                 # Update the class variable with the final path
                 self.install_dir.set(target_dir)
@@ -483,12 +494,12 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                     creationflags=subprocess.CREATE_NO_WINDOW
                 )
                 
-                # Attendre la fin du processus avec un timeout
+                # Wait for the process to finish with a timeout
                 try:
-                    stdout, stderr = process.communicate(timeout=300)  # 5 minutes de timeout
+                    stdout, stderr = process.communicate(timeout=300)  # 5 minutes timeout
                     
                     if process.returncode != 0:
-                        error_msg = f"Failed to clone the repository.\n\nError output:\n{stderr}"
+                        error_msg = f"Cloning failed.\n\nError output:\n{stderr}"
                         print(error_msg)
                         messagebox.showerror("Cloning Error", error_msg)
                         return False
@@ -518,7 +529,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                             shutil.copy2(s, d)
                         items_copied += 1
                     except Exception as copy_error:
-                        print(f"[ERROR] Unable to copy {s} to {d}: {copy_error}")
+                        print(f"[ERROR] Failed to copy {s} to {d}: {copy_error}")
                         continue
                 
                 print(f"[DEBUG] {items_copied} elements copied successfully")
@@ -526,9 +537,9 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 return True
                 
             except Exception as e:
-                error_msg = f"Error during repository cloning: {e}"
+                error_msg = f"Cloning failed: {e}"
                 print(error_msg)
-                messagebox.showerror("Installation Error", error_msg)
+                messagebox.showerror("Cloning Error", error_msg)
                 return False
                 
             finally:
@@ -537,10 +548,10 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                     try:
                         shutil.rmtree(temp_dir, ignore_errors=True)
                     except Exception as e:
-                        print(f"Warning: unable to delete temporary directory {temp_dir}: {e}")
+                        print(f"Warning: unable to remove temporary directory {temp_dir}: {e}")
                         
         except Exception as e:
-            error_msg = f"Error during installation preparation: {e}"
+            error_msg = f"Failed to prepare installation: {e}"
             print(error_msg)
             messagebox.showerror("Installation Error", error_msg)
             return False
@@ -585,7 +596,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
             except (OSError, IOError):
                 continue
                 
-        # If no location is accessible, use the temporary directory
+        # Si aucun emplacement n'est accessible, utiliser le répertoire temporaire
         temp_dir = os.path.join(tempfile.gettempdir(), 'Telegram_Manager')
         os.makedirs(temp_dir, exist_ok=True)
         return temp_dir
@@ -607,13 +618,13 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 return
             
             # Verify if the directory exists
-            print(f"[DEBUG] - Verifying the directory: {install_dir}")
+            print(f"[DEBUG] Directory verification: {install_dir}")
             if not os.path.exists(install_dir):
-                print(f"[DEBUG] - Directory does not exist: {install_dir}")
+                print(f"[DEBUG] Directory creation: {install_dir}")
                 try:
                     os.makedirs(install_dir, exist_ok=True)
                 except Exception as e:
-                    error_msg = f"Unable to create directory {install_dir}: {e}"
+                    error_msg = f"Failed to create directory {install_dir}: {e}"
                     print(f"[ERROR] {error_msg}")
                     self.root.after(0, self.update_status, error_msg, 0)
                     self.root.after(0, messagebox.showerror, "Installation Error", error_msg)
@@ -626,24 +637,24 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 with open(test_file, 'w') as f:
                     f.write('test')
                 os.remove(test_file)
-                print("[DEBUG] Write permissions test passed")
+                print("[DEBUG] Write permissions test successful")
             except Exception as e:
-                error_msg = f"Unable to write to directory {install_dir}: {e}"
+                error_msg = f"Failed to write to directory {install_dir}: {e}"
                 print(f"[ERROR] {error_msg}")
                 self.root.after(0, self.update_status, error_msg, 0)
                 self.root.after(0, messagebox.showerror, "Installation Error", error_msg)
                 return
             
-            # Remove the temporary directory if it exists
+            # Remove temporary directory if it exists
             temp_repo = os.path.join(install_dir, 'repo')
             if os.path.exists(temp_repo):
-                print(f"[DEBUG] Removing temporary directory: {temp_repo}")
+                print(f"[DEBUG] Temporary directory removal: {temp_repo}")
                 try:
                     shutil.rmtree(temp_repo, ignore_errors=True)
                 except Exception as e:
-                    print(f"[WARNING] Unable to remove temporary directory {temp_repo}: {e}")
+                    print(f"[ATTENTION] Unable to remove temporary directory {temp_repo}: {e}")
             
-            # Download the GitHub repository
+            # Download GitHub repository
             status_msg = "Downloading GitHub repository..."
             print(f"[DEBUG] {status_msg}")
             self.root.after(0, self.update_status, status_msg, 30)
@@ -657,15 +668,15 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                 self.root.after(0, messagebox.showerror, "Installation Error", error_msg)
             else:
                 print(f"[DEBUG] Download and copy files completed successfully in {install_dir}")
-                # Verify that the files have been copied
+                # Verify that files have been copied
                 required_files = ['setup_installer.py', 'launch.py']
                 install_dir = self.install_dir.get()
                 
-                print(f"[DEBUG] Verifying files in {install_dir}")
+                print(f"[DEBUG] File verification in {install_dir}")
                 missing_files = [f for f in required_files if not os.path.exists(os.path.join(install_dir, f))]
                 
                 if missing_files:
-                    error_msg = f"Missing files in {install_dir}: {', '.join(missing_files)}"
+                    error_msg = f"Files missing in {install_dir}: {', '.join(missing_files)}"
                     print(f"[ERROR] {error_msg}")
                     print(f"[DEBUG] Directory content: {os.listdir(install_dir)}")
                     self.root.after(0, self.update_status, error_msg, 0)
@@ -710,23 +721,23 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                     print(f"[SUCCESS] {success_msg}")
                     self.root.after(0, self.update_status, success_msg, 100)
                     
-                    # Launch the application
+                    # Lancer l'application
                     launch_path = os.path.join(install_dir, 'launch.py')
                     if os.path.exists(launch_path):
                         try:
-                            # Create a shortcut on the desktop if requested
+                            # Créer un raccourci sur le bureau si demandé
                             if self.create_desktop_shortcut.get():
                                 try:
-                                    # Create a folder for shortcuts if necessary
+                                    # Créer un dossier pour les raccourcis si nécessaire
                                     shortcuts_dir = os.path.join(install_dir, 'Shortcuts')
                                     os.makedirs(shortcuts_dir, exist_ok=True)
                                     
-                                    # Force the use of the public desktop
+                                    # Forcer l'utilisation du bureau public
                                     public_desktop = os.path.join(os.environ.get('PUBLIC', ''), 'Desktop')
-                                    os.makedirs(public_desktop, exist_ok=True)  # Create the folder if it doesn't exist
+                                    os.makedirs(public_desktop, exist_ok=True)  # Créer le dossier s'il n'existe pas
                                     print(f"[DEBUG] Using public desktop: {public_desktop}")
                                     
-                                    # Create the shortcut
+                                    # Créer le raccourci
                                     shortcut_created = self.create_shortcut(
                                         os.path.join(install_dir, 'launch.py'),
                                         'Telegram Manager',
@@ -744,7 +755,31 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                                     print(error_msg)
                                     success_msg += "\n- Failed to create the shortcut on the desktop"
                             
-                            # The shortcut of the Start menu has been removed from this version
+                            # Create a shortcut in the Start Menu (always enabled)
+                            try:
+                                # Get the Start Menu path
+                                start_menu_path = self._get_start_menu_path()
+                                os.makedirs(start_menu_path, exist_ok=True)
+                                print(f"[DEBUG] Using Start Menu: {start_menu_path}")
+                                
+                                # Create the shortcut in the Start Menu
+                                start_menu_shortcut_created = self.create_shortcut(
+                                    os.path.join(install_dir, 'launch.py'),
+                                    'Telegram Manager',
+                                    start_menu_path
+                                )
+                                
+                                if start_menu_shortcut_created:
+                                    print("[DEBUG] The shortcut has been created in the Start Menu")
+                                    success_msg += "\n- The shortcut has been created in the Start Menu"
+                                else:
+                                    print("[WARNING] Failed to create the shortcut in the Start Menu")
+                                    success_msg += "\n- Failed to create the shortcut in the Start Menu"
+                                    
+                            except Exception as e:
+                                error_msg = f"[WARNING] Error creating Start Menu shortcut: {e}"
+                                print(error_msg)
+                                success_msg += "\n- Failed to create the shortcut in the Start Menu"
                             
                             # Launch the application in the background
                             setup_src_path = os.path.join(install_dir, 'setup', 'src')
@@ -771,16 +806,16 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
                     self.root.after(0, messagebox.showinfo, "Installation successful", success_msg)
                 return
                 
-            # Update the installation status
+            # Mettre à jour le statut de l'installation
             self.root.after(0, self.update_status, "Installation completed successfully!", 100)
             
         except Exception as e:
-            error_msg = f"Unexpected error during installation: {e}"
+            error_msg = f"Unexpected error during installation : {e}"
             print(error_msg)
             self.root.after(0, self.update_status, error_msg, 0)
             self.root.after(0, messagebox.showerror, "Installation error", error_msg)
         finally:
-            # Reactivate the installation button in all cases
+            # Réactiver le bouton d'installation dans tous les cas
             if hasattr(self, 'install_btn'):
                 self.root.after(0, self.install_btn.config, {
                     'state': tk.NORMAL, 
@@ -789,7 +824,7 @@ start "" /B "{sys.executable}" "{os.path.join(target_dir, 'launch.py')}" %*
             self.installation_in_progress = False
 
     def start_installation(self):
-        """Launch the installation process of the application."""
+        """Lance le processus d'installation de l'application."""
         if self.installation_in_progress:
             return
             
@@ -807,10 +842,10 @@ def is_admin():
         return False
 
 def main():
-    # Create a log file for debugging
-    log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'installer.log')
+    # Créer un fichier de log pour le débogage
+    log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Log_file.log')
     with open(log_file, 'w', encoding='utf-8') as f:
-        f.write("=== Telegram Manager Installation ===\n")
+        f.write("=== Installation started ===\n")
     
     def log(message):
         with open(log_file, 'a', encoding='utf-8') as f:
@@ -818,7 +853,7 @@ def main():
         print(f"[LOG] {message}")
     
     try:
-        log("Starting Installation...")
+        log("Installation started...")
         
         if not is_admin():
             log("Elevation of privileges required...")
@@ -827,15 +862,15 @@ def main():
                 log(f"Script path: {script_path}")
                 log(f"Python interpreter: {sys.executable}")
                 
-                # Display an information dialog box
+                # Display an information dialog
                 ctypes.windll.user32.MessageBoxW(
                     0,
-                    "Telegram Manager installation requires administrator privileges.\n\nPlease confirm the elevation of privileges in the window that will open.",
-                    "Telegram Manager Installation",
+                    "Telegram Manager installation requires administrator privileges.\n\nPlease confirm elevation of privileges in the window that will open.",
+                    "Installation of Telegram Manager",
                     0x40 | 0x1  # MB_ICONINFORMATION | MB_OKCANCEL
                 )
                 
-                # Relaunch with elevation
+                # Relancer avec élévation
                 result = ctypes.windll.shell32.ShellExecuteW(
                     None, 
                     "runas", 
@@ -852,7 +887,7 @@ def main():
                 return
                 
             except Exception as e:
-                error_msg = f"Failed to elevate privileges: {e}"
+                error_msg = f"Error elevating privileges: {e}"
                 log(error_msg)
                 ctypes.windll.user32.MessageBoxW(
                     0,
@@ -877,7 +912,7 @@ def main():
             ctypes.windll.user32.MessageBoxW(
                 0,
                 f"A required dependency is missing: {e}\n\nPlease install the dependencies with the command:\npip install pywin32\n\nLog details: {log_file}",
-                "Dependency missing",
+                "Missing dependency",
                 0x10  # MB_ICONERROR
             )
             return
@@ -886,16 +921,39 @@ def main():
         try:
             log("Creating user interface...")
             root = tk.Tk()
+            # Set the application icon
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            icon_path = os.path.join(script_dir, 'app_icon.ico')
+            if os.path.exists(icon_path):
+                try:
+                    # Méthode principale
+                    root.iconbitmap(icon_path)
+                    root.wm_iconbitmap(icon_path)
+
+                    # Méthode alternative avec ctypes pour forcer l'icône
+                    try:
+                        import ctypes
+                        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("TelegramManager.Installer")
+                        root.tk.call('wm', 'iconphoto', root._w, tk.PhotoImage(file=icon_path))
+                    except Exception as e:
+                        log(f"Alternative method failed: {e}")
+
+                    log(f"Icon loaded successfully: {icon_path}")
+                except Exception as e:
+                    log(f"Failed to load icon: {e}")
+            else:
+                log(f"Icon file not found: {icon_path}")
+            
             app = InstallerApp(root)
             log("Starting main loop...")
             root.mainloop()
             log("Installation completed successfully")
             
         except Exception as e:
-            error_msg = f"Error starting the application: {e}"
+            error_msg = f"Error starting application: {e}"
             log(error_msg)
             import traceback
-            log("Traceback complet:")
+            log("Complete traceback:")
             log(traceback.format_exc())
             
             ctypes.windll.user32.MessageBoxW(
@@ -906,12 +964,12 @@ def main():
             )
     
     except Exception as e:
-        # Capture unexpected errors
+        # Capture des erreurs inattendues
         error_msg = f"Unexpected error: {e}"
         with open(log_file, 'a', encoding='utf-8') as f:
             f.write(f"[ERROR] {error_msg}\n")
             import traceback
-            f.write("Traceback complet:\n")
+            f.write("Complete traceback:\n")
             f.write(traceback.format_exc())
         
         print(f"[ERROR] {error_msg}")
