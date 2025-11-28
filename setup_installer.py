@@ -37,7 +37,7 @@ class InstallerApp:
         self.create_desktop_shortcut = tk.BooleanVar(value=True)
         self.create_start_menu = tk.BooleanVar(value=True)
         self.github_repo = 'https://github.com/Joelab7/TG_MANAGER.git'
-        self.github_token = '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'
+        self.github_token = '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'
         self.installation_in_progress = False
         
         self.setup_ui()
