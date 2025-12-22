@@ -728,10 +728,6 @@ class InstallerApp:
                             # Créer un raccourci sur le bureau si demandé
                             if self.create_desktop_shortcut.get():
                                 try:
-                                    # Créer un dossier pour les raccourcis si nécessaire
-                                    shortcuts_dir = os.path.join(install_dir, 'Shortcuts')
-                                    os.makedirs(shortcuts_dir, exist_ok=True)
-                                    
                                     # Forcer l'utilisation du bureau public
                                     public_desktop = os.path.join(os.environ.get('PUBLIC', ''), 'Desktop')
                                     os.makedirs(public_desktop, exist_ok=True)  # Créer le dossier s'il n'existe pas
