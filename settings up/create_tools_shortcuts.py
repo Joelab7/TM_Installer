@@ -10,20 +10,77 @@ from pathlib import Path
 class ProjectShortcutCreator:
     def __init__(self):
         self.project_root = Path(__file__).parent.parent
-        self.settings_dir = self.project_root / "Settings up"
+        # Chercher le dossier settings avec plusieurs noms possibles
+        possible_settings = ["Settings up", "settings up", "settings", "Settings"]
+        self.settings_dir = None
+        for name in possible_settings:
+            candidate = self.project_root / name
+            if candidate.exists():
+                self.settings_dir = candidate
+                break
         
-    def create_shortcut(self, target_path, shortcut_name, shortcut_dir, icon_path=None):
-        """Crée un raccourci Windows portable.
+        if not self.settings_dir:
+            print(f"[WARNING] Dossier de paramètres introuvable, utilisation du répertoire parent")
+            self.settings_dir = self.project_root
         
-        Args:
-            target_path: Chemin du fichier cible (relatif si possible)
-            shortcut_name: Nom du raccourci (sans extension .lnk)
-            shortcut_dir: Répertoire où créer le raccourci
-            icon_path: Chemin de l'icône (optionnel)
+    def find_batch_files(self):
+        """Cherche dynamiquement les fichiers batch avec plusieurs noms possibles."""
+        possible_pairs = [
+            ("install.bat", "uninstall.bat"),
+            ("install.exe", "uninstall.exe"),
+            ("setup.bat", "cleanup.bat"),
+            ("run_install.bat", "run_uninstall.bat")
+        ]
+        
+        for install_name, uninstall_name in possible_pairs:
+            install_path = self.settings_dir / install_name
+            uninstall_path = self.settings_dir / uninstall_name
             
-        Returns:
-            bool: True si succès, False sinon
-        """
+            if install_path.exists() and uninstall_path.exists():
+                print(f"[INFO] Fichiers trouvés: {install_name}, {uninstall_name}")
+                return install_path, uninstall_path
+        
+        # Si aucun pair trouvé, chercher individuellement
+        install_files = list(self.settings_dir.glob("install*.bat")) + list(self.settings_dir.glob("install*.exe"))
+        uninstall_files = list(self.settings_dir.glob("uninstall*.bat")) + list(self.settings_dir.glob("uninstall*.exe"))
+        
+        if install_files and uninstall_files:
+            return install_files[0], uninstall_files[0]
+        
+        return None, None
+        
+    def find_icon(self, icon_type):
+        """Cherche une icône avec plusieurs noms possibles."""
+        icon_dirs = [
+            self.settings_dir / "settings images",
+            self.settings_dir / "images",
+            self.settings_dir / "icons",
+            self.settings_dir
+        ]
+        
+        possible_names = [
+            f"{icon_type}_icon.ico",
+            f"{icon_type}.ico",
+            f"{icon_type}_icon.png",
+            f"{icon_type}.png",
+            "icon.ico",
+            "icon.png",
+            "app.ico",
+            "app.png"
+        ]
+        
+        for icon_dir in icon_dirs:
+            if not icon_dir.exists():
+                continue
+            for name in possible_names:
+                icon_path = icon_dir / name
+                if icon_path.exists():
+                    return icon_path
+        
+        return None
+        
+    def create_portable_shortcut(self, target_filename, shortcut_name, shortcut_dir, icon_path=None):
+        """Crée un raccourci portable qui fonctionne sur n'importe quel appareil."""
         try:
             # Créer le chemin complet du raccourci
             shortcut_path = os.path.join(shortcut_dir, f"{shortcut_name}.lnk")
@@ -36,29 +93,69 @@ class ProjectShortcutCreator:
                 shell = Dispatch('WScript.Shell')
                 shortcut = shell.CreateShortCut(shortcut_path)
                 
-                # Configurer le raccourci avec des chemins relatifs si possible
-                target_abs_path = os.path.abspath(target_path)
-                shortcut.TargetPath = target_abs_path
+                # Créer un script batch temporaire pour la portabilité
+                batch_content = f"""@echo off
+setlocal enabledelayedexpansion
+
+echo Recherche du fichier {target_filename}...
+cd /d "%~dp0"
+
+rem Chercher dans le répertoire courant
+if exist "{target_filename}" (
+    echo Fichier trouvé dans le répertoire courant
+    "{target_filename}"
+    goto :end
+)
+
+rem Chercher dans les sous-dossiers
+for /d %%d in (*) do (
+    if exist "%%d\\{target_filename}" (
+        echo Fichier trouvé dans le sous-dossier: %%d
+        cd "%%d"
+        "{target_filename}"
+        goto :end
+    )
+)
+
+rem Chercher récursivement
+for /r %%f in ({target_filename}) do (
+    echo Fichier trouvé: %%f
+    start "" "%%f"
+    goto :end
+)
+
+echo Erreur: Fichier {target_filename} introuvable
+pause
+
+:end
+endlocal
+"""
                 
-                # Working Directory: utiliser le répertoire parent de la cible
-                # mais de manière portable
-                working_dir = os.path.dirname(target_abs_path)
-                shortcut.WorkingDirectory = working_dir
+                # Créer le script batch portable
+                batch_filename = f"run_{shortcut_name.replace(' ', '_')}.bat"
+                batch_path = os.path.join(shortcut_dir, batch_filename)
+                
+                with open(batch_path, 'w', encoding='utf-8') as f:
+                    f.write(batch_content)
+                
+                # Configurer le raccourci pour pointer vers le script batch
+                shortcut.TargetPath = batch_path
+                shortcut.WorkingDirectory = shortcut_dir
                 shortcut.WindowStyle = 1  # 1 = Normal
                 
-                # Gestion de l'icône de manière portable
+                # Ajouter l'icône si spécifiée
                 if icon_path and os.path.exists(icon_path):
-                    icon_abs_path = os.path.abspath(icon_path)
-                    shortcut.IconLocation = f"{icon_abs_path},0"
-                    print(f"[INFO] Icône appliquée: {icon_abs_path}")
+                    shortcut.IconLocation = f"{os.path.abspath(icon_path)},0"
+                    print(f"[INFO] Icône appliquée: {icon_path}")
                 else:
-                    # Utiliser l'icône par défaut du fichier cible
-                    shortcut.IconLocation = f"{target_abs_path},0"
-                    print(f"[WARNING] Icône non trouvée, utilisation de l'icône par défaut")
+                    # Utiliser l'icône par défaut du système
+                    shortcut.IconLocation = sys.executable
+                    print(f"[INFO] Icône par défaut utilisée")
                 
                 # Sauvegarder le raccourci
                 shortcut.save()
-                print(f"[SUCCESS] Raccourci créé: {shortcut_path}")
+                print(f"[SUCCESS] Raccourci portable créé: {shortcut_path}")
+                print(f"[INFO] Script batch associé: {batch_path}")
                 return True
                 
             finally:
@@ -71,112 +168,49 @@ class ProjectShortcutCreator:
             traceback.print_exc()
             return False
     
-    def create_portable_shortcut(self, target_path, shortcut_name, shortcut_dir, icon_path=None):
-        """Crée un raccourci Windows portable qui fonctionne sur n'importe quel appareil.
-        
-        Cette méthode crée un raccourci qui utilise des chemins relatifs
-        et des variables d'environnement pour fonctionner sur différents appareils.
-        
-        Args:
-            target_path: Chemin du fichier cible
-            shortcut_name: Nom du raccourci (sans extension .lnk)
-            shortcut_dir: Répertoire où créer le raccourci
-            icon_path: Chemin de l'icône (optionnel)
-            
-        Returns:
-            bool: True si succès, False sinon
-        """
-        try:
-            # Créer le chemin complet du raccourci
-            shortcut_path = os.path.join(shortcut_dir, f"{shortcut_name}.lnk")
-            
-            # Initialiser COM
-            pythoncom.CoInitialize()
-            
-            try:
-                # Créer le raccourci
-                shell = Dispatch('WScript.Shell')
-                shortcut = shell.CreateShortCut(shortcut_path)
-                
-                # Convertir les chemins en chemins absolus pour la création
-                target_abs_path = os.path.abspath(target_path)
-                shortcut.TargetPath = target_abs_path
-                
-                # Working Directory: utiliser le répertoire parent de la cible
-                working_dir = os.path.dirname(target_abs_path)
-                shortcut.WorkingDirectory = working_dir
-                shortcut.WindowStyle = 1  # 1 = Normal
-                
-                # Gestion de l'icône portable
-                if icon_path and os.path.exists(icon_path):
-                    icon_abs_path = os.path.abspath(icon_path)
-                    shortcut.IconLocation = f"{icon_abs_path},0"
-                    print(f"[INFO] Icône portable appliquée: {icon_abs_path}")
-                else:
-                    # Utiliser l'icône par défaut du fichier cible
-                    shortcut.IconLocation = f"{target_abs_path},0"
-                    print(f"[INFO] Icône par défaut utilisée: {target_abs_path}")
-                
-                # Sauvegarder le raccourci
-                shortcut.save()
-                print(f"[SUCCESS] Raccourci portable créé: {shortcut_path}")
-                print(f"[INFO] Cible: {target_abs_path}")
-                print(f"[INFO] Répertoire de travail: {working_dir}")
-                return True
-                
-            finally:
-                # Nettoyer COM
-                pythoncom.CoUninitialize()
-                
-        except Exception as e:
-            print(f"[ERROR] Échec de création du raccourci portable {shortcut_name}: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-    
     def create_project_shortcuts(self):
-        """Crée les raccourcis d'installation et désinstallation à la racine du projet."""
+        """Crée les raccourcis d'installation et désinstallation portables à la racine du projet."""
         print(f"[INFO] Création des raccourcis portables dans: {self.project_root}")
         
-        # Vérifier que les fichiers batch existent
-        install_bat = self.settings_dir / "install.bat"
-        uninstall_bat = self.settings_dir / "uninstall.bat"
+        # Chercher dynamiquement les fichiers batch
+        install_bat, uninstall_bat = self.find_batch_files()
         
-        if not install_bat.exists():
-            print(f"[ERROR] Fichier introuvable: {install_bat}")
+        if not install_bat:
+            print(f"[ERROR] Aucun fichier d'installation trouvé")
             return False
             
-        if not uninstall_bat.exists():
-            print(f"[ERROR] Fichier introuvable: {uninstall_bat}")
+        if not uninstall_bat:
+            print(f"[ERROR] Aucun fichier de désinstallation trouvé")
             return False
         
-        # Chemins des icônes (dans settings images)
-        install_icon = self.settings_dir / "settings images" / "Installation_icon.ico"
-        uninstall_icon = self.settings_dir / "settings images" / "Uninstallation_icon.ico"
+        print(f"[INFO] Fichiers trouvés: {install_bat.name}, {uninstall_bat.name}")
+        
+        # Chercher les icônes dynamiquement
+        install_icon = self.find_icon("installation")
+        uninstall_icon = self.find_icon("uninstallation")
         
         # Créer le raccourci d'installation portable
         install_success = self.create_portable_shortcut(
-            target_path=install_bat,
+            target_filename=install_bat.name,
             shortcut_name="installation_tool",
             shortcut_dir=str(self.project_root),
-            icon_path=install_icon if install_icon.exists() else None
+            icon_path=install_icon
         )
         
         # Créer le raccourci de désinstallation portable
         uninstall_success = self.create_portable_shortcut(
-            target_path=uninstall_bat,
+            target_filename=uninstall_bat.name,
             shortcut_name="uninstallation_tool", 
             shortcut_dir=str(self.project_root),
-            icon_path=uninstall_icon if uninstall_icon.exists() else None
+            icon_path=uninstall_icon
         )
         
         # Résumé
         if install_success and uninstall_success:
             print("\n[SUCCESS] Tous les raccourcis portables ont été créés avec succès!")
-            print(f"  - installation_tool.lnk -> {install_bat}")
-            print(f"  - uninstallation_tool.lnk -> {uninstall_bat}")
-            print("\n[INFO] Ces raccourcis utiliseront des chemins absolus mais fonctionneront")
-            print("[INFO] car ils pointent vers les fichiers dans la structure du projet.")
+            print(f"  - installation_tool.lnk -> recherche automatique de {install_bat.name}")
+            print(f"  - uninstallation_tool.lnk -> recherche automatique de {uninstall_bat.name}")
+            print("\n[INFO] Ces raccourcis fonctionneront sur n'importe quel appareil")
             return True
         else:
             print("\n[ERROR] Certains raccourcis n'ont pas pu être créés.")
