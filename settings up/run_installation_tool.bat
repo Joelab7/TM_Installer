@@ -6,7 +6,7 @@ cd /d "%~dp0"
 
 rem Chercher dans le répertoire courant (settings up)
 if exist "install.bat" (
-    echo Fichier trouvé dans le répertoire courant
+    echo Fichier trouvé dans le répertoire courant: %cd%\install.bat
     "install.bat"
     goto :end
 )
@@ -24,19 +24,22 @@ for /d %%d in (*) do (
 rem Chercher dans le répertoire parent
 cd ..
 if exist "install.bat" (
-    echo Fichier trouvé dans le répertoire parent
+    echo Fichier trouvé dans le répertoire parent: %cd%\install.bat
     "install.bat"
     goto :end
 )
 
 rem Chercher récursivement depuis le répertoire parent
 for /r %%f in (install.bat) do (
-    echo Fichier trouvé: %%f
+    echo Fichier trouvé recursivement: %%f
     start "" "%%f"
     goto :end
 )
 
 echo Erreur: Fichier install.bat introuvable
+echo Répertoire actuel: %cd%
+echo Contenu du répertoire:
+dir /b
 pause
 
 :end
