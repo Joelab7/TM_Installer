@@ -36,8 +36,6 @@ class InstallerApp:
         self.install_dir = tk.StringVar(value=os.environ['PROGRAMFILES'])
         self.create_desktop_shortcut = tk.BooleanVar(value=True)
         self.create_start_menu = tk.BooleanVar(value=True)
-        self.github_repo = 'https://github.com/Joelab7/TG_MANAGER.git'
-        self.github_token = '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'
         self.installation_in_progress = False
         
         self.setup_ui()
@@ -412,148 +410,124 @@ class InstallerApp:
             traceback.print_exc()
             return False
             
-    def download_github_repo(self, url, target_dir):
-        """Clone the GitHub repository using git with token authentication."""
-        print(f"[DEBUG] Starting download_github_repo with target_dir: {target_dir}")
-        temp_dir = None
-        
-        # Check if git is installed
-        try:
-            subprocess.run(['git', '--version'], check=True, capture_output=True, text=True)
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            error_msg = "Git is not installed or not in PATH."
-            print(f"{error_msg} Error: {e}")
-            messagebox.showerror(
-                "Installation Error",
-                f"{error_msg}\n\n"
-                "Please install Git from https://git-scm.com/download/win\n"
-                "and verify that it is added to your PATH."
-            )
-            return False
+    def extract_from_pack(self, target_dir):
+        """Extrait le contenu d'un fichier ZIP depuis le répertoire PACK vers le répertoire d'installation."""
+        print(f"[DEBUG] Starting extract_from_pack with target_dir: {target_dir}")
         
         try:
-            # Check if the target directory already exists with an installer
-            print(f"[DEBUG] Checking target directory: {target_dir}")
-            if os.path.exists(target_dir):
-                setup_path = os.path.join(target_dir, 'setup_installer.py')
-                print(f"[DEBUG] Checking existence of {setup_path}")
-                if os.path.exists(setup_path):
-                    print("[DEBUG] Installation already present, returning True")
-                    return True  # Installation déjà présente
-                
-                # Ne pas créer de nouveau dossier, utiliser celui spécifié
-                # car le répertoire de téléchargement est déjà un emplacement valide
-                pass
+            # Obtenir le chemin du répertoire PACK (même niveau que le script)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            pack_dir = os.path.join(script_dir, 'PACK')
             
-            # Create the parent directory if it doesn't exist
-            print(f"[DEBUG] Creating target directory: {target_dir}")
+            print(f"[DEBUG] Script directory: {script_dir}")
+            print(f"[DEBUG] PACK directory: {pack_dir}")
+            
+            # Vérifier si le répertoire PACK existe
+            if not os.path.exists(pack_dir):
+                error_msg = f"PACK directory not found: {pack_dir}"
+                print(f"[ERROR] {error_msg}")
+                messagebox.showerror("Installation Error", error_msg)
+                return False
+            
+            # Rechercher tous les fichiers ZIP dans le répertoire PACK
+            zip_files = [f for f in os.listdir(pack_dir) if f.lower().endswith('.zip')]
+            
+            if not zip_files:
+                error_msg = f"No ZIP file found in PACK directory: {pack_dir}"
+                print(f"[ERROR] {error_msg}")
+                messagebox.showerror("Installation Error", error_msg)
+                return False
+            
+            # Utiliser le premier fichier ZIP trouvé (peu importe le nom)
+            zip_file = zip_files[0]
+            zip_path = os.path.join(pack_dir, zip_file)
+            print(f"[DEBUG] Using ZIP file: {zip_path}")
+            
+            # Créer le répertoire cible s'il n'existe pas
             os.makedirs(target_dir, exist_ok=True)
             
-            # Verify that the directory is writable
+            # Vérifier que le répertoire est accessible en écriture
             test_file = os.path.join(target_dir, 'test_write.tmp')
             try:
                 with open(test_file, 'w') as f:
                     f.write('test')
                 os.remove(test_file)
                 print(f"[DEBUG] Directory {target_dir} is writable")
-                
-                # Create a subdirectory 'TelegramManager' if it doesn't exist
-                if not target_dir.endswith('Telegram Manager'):
-                    target_dir = os.path.join(target_dir, 'Telegram Manager')
-                    os.makedirs(target_dir, exist_ok=True)
-                    print(f"[DEBUG] Using subdirectory: {target_dir}")
-                
-                # Update the class variable with the final path
-                self.install_dir.set(target_dir)
-                print(f"[DEBUG] Installation directory set to: {target_dir}")
             except Exception as e:
                 print(f"[ERROR] Unable to write to {target_dir}: {e}")
+                messagebox.showerror("Installation Error", f"Unable to write to {target_dir}: {e}")
                 return False
             
-            # Configure authentication
-            env = os.environ.copy()
-            env['GIT_TERMINAL_PROMPT'] = '0'  # Disable interactive prompts
+            # Forcer l'utilisation du sous-répertoire 'Telegram Manager'
+            final_target_dir = target_dir
+            if not target_dir.endswith('Telegram Manager'):
+                final_target_dir = os.path.join(target_dir, 'Telegram Manager')
+                os.makedirs(final_target_dir, exist_ok=True)
+                print(f"[DEBUG] Using subdirectory: {final_target_dir}")
+            else:
+                final_target_dir = target_dir
             
-            # Build authentication URL with token
-            auth_url = f"https://{self.github_token}@github.com/Joelab7/TG_MANAGER.git"
+            # Mettre à jour la variable de classe avec le chemin final
+            self.install_dir.set(final_target_dir)
+            print(f"[DEBUG] Installation directory set to: {final_target_dir}")
             
-            # Create a temporary directory for cloning
-            temp_dir = tempfile.mkdtemp(prefix='tg_manager_', dir=os.environ.get('TEMP'))
+            # Extraire le fichier ZIP
+            self.update_status("Extracting files from PACK archive...", 30)
+            print(f"[DEBUG] Extracting {zip_path} to {final_target_dir}")
             
             try:
-                self.update_status("Cloning GitHub repository...", 20)
-                
-                # Execute git clone with authentication
-                process = subprocess.Popen(
-                    ['git', 'clone', '--depth', '1', '--single-branch', auth_url, 'repo'],
-                    cwd=temp_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    env=env,
-                    creationflags=subprocess.CREATE_NO_WINDOW
-                )
-                
-                # Wait for the process to finish with a timeout
-                try:
-                    stdout, stderr = process.communicate(timeout=300)  # 5 minutes timeout
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    # Lister les fichiers dans le ZIP
+                    file_list = zip_ref.namelist()
+                    print(f"[DEBUG] Files in ZIP: {len(file_list)} files")
                     
-                    if process.returncode != 0:
-                        error_msg = f"Cloning failed.\n\nError output:\n{stderr}"
-                        print(error_msg)
-                        messagebox.showerror("Cloning Error", error_msg)
-                        return False
-                        
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    raise Exception("Cloning took too long. Check your Internet connection.")
-                
-                source_dir = os.path.join(temp_dir, 'repo')
-                
-                # Verify that cloning was successful
-                if not os.path.exists(source_dir):
-                    raise Exception("Cloning failed: source directory does not exist")
-                
-                # Copy cloned files to the target directory
-                print(f"[DEBUG] Copying files from {source_dir} to {target_dir}")
-                items_copied = 0
-                for item in os.listdir(source_dir):
-                    s = os.path.join(source_dir, item)
-                    d = os.path.join(target_dir, item)
-                    try:
-                        if os.path.isdir(s):
-                            print(f"[DEBUG] Copying directory: {s} to {d}")
-                            shutil.copytree(s, d, dirs_exist_ok=True)
-                        else:
-                            print(f"[DEBUG] Copying file: {s} to {d}")
-                            shutil.copy2(s, d)
-                        items_copied += 1
-                    except Exception as copy_error:
-                        print(f"[ERROR] Failed to copy {s} to {d}: {copy_error}")
-                        continue
-                
-                print(f"[DEBUG] {items_copied} elements copied successfully")
-                
-                return True
-                
-            except Exception as e:
-                error_msg = f"Cloning failed: {e}"
-                print(error_msg)
-                messagebox.showerror("Cloning Error", error_msg)
+                    # Extraire tous les fichiers dans le répertoire final
+                    zip_ref.extractall(final_target_dir)
+                    print(f"[DEBUG] Files extracted successfully to {final_target_dir}")
+                    
+                    # Si le ZIP contient un dossier racine (ex: TG_MANAGER-EN/), déplacer les fichiers
+                    extracted_files = os.listdir(final_target_dir)
+                    for item in extracted_files:
+                        item_path = os.path.join(final_target_dir, item)
+                        if os.path.isdir(item_path) and item not in ['setup', 'requirements.txt']:
+                            # Déplacer le contenu du sous-dossier vers le répertoire parent
+                            src_path = os.path.join(final_target_dir, item)
+                            
+                            # Déplacer tous les fichiers du sous-dossier vers la racine
+                            for sub_item in os.listdir(src_path):
+                                sub_src = os.path.join(src_path, sub_item)
+                                sub_dest = os.path.join(final_target_dir, sub_item)
+                                shutil.move(sub_src, sub_dest)
+                            
+                            # Supprimer le sous-dossier vide
+                            try:
+                                os.rmdir(src_path)
+                            except:
+                                pass
+                    
+                    print(f"[DEBUG] File structure reorganized for Telegram Manager")
+                    
+            except zipfile.BadZipFile:
+                error_msg = f"The file {zip_file} is not a valid ZIP archive"
+                print(f"[ERROR] {error_msg}")
+                messagebox.showerror("Extraction Error", error_msg)
                 return False
-                
-            finally:
-                # Clean up temporary directory
-                if temp_dir and os.path.exists(temp_dir):
-                    try:
-                        shutil.rmtree(temp_dir, ignore_errors=True)
-                    except Exception as e:
-                        print(f"Warning: unable to remove temporary directory {temp_dir}: {e}")
-                        
+            except Exception as e:
+                error_msg = f"Error extracting ZIP file: {e}"
+                print(f"[ERROR] {error_msg}")
+                messagebox.showerror("Extraction Error", error_msg)
+                return False
+            
+            # Vérifier que les fichiers ont été extraits
+            # (Plus de vérification - installation directe)
+            
+            print(f"[DEBUG] Extraction completed successfully in {final_target_dir}")
+            return True
+            
         except Exception as e:
-            error_msg = f"Failed to prepare installation: {e}"
+            error_msg = f"Failed to extract from PACK: {e}"
             print(error_msg)
-            messagebox.showerror("Installation Error", error_msg)
+            messagebox.showerror("Extraction Error", error_msg)
             return False
 
     def get_safe_install_dir(self):
@@ -654,152 +628,139 @@ class InstallerApp:
                 except Exception as e:
                     print(f"[ATTENTION] Unable to remove temporary directory {temp_repo}: {e}")
             
-            # Download GitHub repository
-            status_msg = "Downloading GitHub repository..."
+            # Extraire les fichiers depuis le répertoire PACK
+            status_msg = "Extracting files from PACK directory..."
             print(f"[DEBUG] {status_msg}")
             self.root.after(0, self.update_status, status_msg, 30)
             
-            # Télécharger le dépôt
-            print(f"[DEBUG] Calling download_github_repo with install_dir={install_dir}")
-            if not self.download_github_repo(None, install_dir):
-                error_msg = "Failed to download GitHub repository"
+            # Extraire depuis PACK
+            print(f"[DEBUG] Calling extract_from_pack with install_dir={install_dir}")
+            if not self.extract_from_pack(install_dir):
+                error_msg = "Failed to extract files from PACK directory"
                 print(f"[ERROR] {error_msg}")
                 self.root.after(0, self.update_status, error_msg, 0)
                 self.root.after(0, messagebox.showerror, "Installation Error", error_msg)
             else:
-                print(f"[DEBUG] Download and copy files completed successfully in {install_dir}")
-                # Verify that files have been copied
-                required_files = ['setup_installer.py', 'launch.py']
+                print(f"[DEBUG] File extraction completed successfully in {install_dir}")
                 install_dir = self.install_dir.get()
                 
-                print(f"[DEBUG] File verification in {install_dir}")
-                missing_files = [f for f in required_files if not os.path.exists(os.path.join(install_dir, f))]
-                
-                if missing_files:
-                    error_msg = f"Files missing in {install_dir}: {', '.join(missing_files)}"
+                # Install dependencies
+                self.root.after(0, self.update_status, "Installing dependencies...", 90)
+                print("[DEBUG] Installing dependencies...")
+                requirements_path = os.path.join(install_dir, 'requirements.txt')
+                # (Plus de vérification - installation directe des dépendances)
+                try:
+                    print(f"[DEBUG] Executing: {sys.executable} -m pip install -r {requirements_path}")
+                    process = subprocess.Popen(
+                        [sys.executable, '-m', 'pip', 'install', '-r', requirements_path],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+                    stdout, stderr = process.communicate()
+                    
+                    if process.returncode == 0:
+                        print("[DEBUG] Dependencies installed successfully")
+                        if stdout:
+                            print("[DEBUG] pip output:", stdout)
+                    else:
+                        error_msg = f"Failed to install dependencies (code {process.returncode})"
+                        print(f"[ERROR] {error_msg}")
+                        print("[ERROR] Error output:", stderr)
+                        self.root.after(0, messagebox.showwarning, 
+                                     "Warning", 
+                                     f"{error_msg}\n\nPlease manually install dependencies with the command :\npip install -r {requirements_path}")
+                except Exception as e:
+                    error_msg = f"Error installing dependencies: {str(e)}"
                     print(f"[ERROR] {error_msg}")
-                    print(f"[DEBUG] Directory content: {os.listdir(install_dir)}")
-                    self.root.after(0, self.update_status, error_msg, 0)
-                    self.root.after(0, messagebox.showerror, "Installation Error", error_msg)
-                else:
-                    # Install dependencies
-                    self.root.after(0, self.update_status, "Installing dependencies...", 90)
-                    print("[DEBUG] Installing dependencies...")
-                    requirements_path = os.path.join(install_dir, 'requirements.txt')
-                    if os.path.exists(requirements_path):
+                    self.root.after(0, messagebox.showerror, 
+                                 "Error", 
+                                 f"{error_msg}\n\nPlease manually install dependencies with the command :\npip install -r {requirements_path}")
+                
+                # Success message
+                success_msg = f"Installation completed successfully in {install_dir}"
+                print(f"[SUCCESS] {success_msg}")
+                self.root.after(0, self.update_status, success_msg, 100)
+                
+                # Lancer l'application
+                launch_path = os.path.join(install_dir, 'launch.py')
+                try:
+                    # Créer un raccourci sur le bureau si demandé
+                    if self.create_desktop_shortcut.get():
                         try:
-                            print(f"[DEBUG] Executing: {sys.executable} -m pip install -r {requirements_path}")
-                            process = subprocess.Popen(
-                                [sys.executable, '-m', 'pip', 'install', '-r', requirements_path],
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                text=True,
-                                creationflags=subprocess.CREATE_NO_WINDOW
+                            # Forcer l'utilisation du bureau public
+                            public_desktop = os.path.join(os.environ.get('PUBLIC', ''), 'Desktop')
+                            os.makedirs(public_desktop, exist_ok=True)  # Créer le dossier s'il n'existe pas
+                            print(f"[DEBUG] Using public desktop: {public_desktop}")
+                            
+                            # Créer le raccourci
+                            shortcut_created = self.create_shortcut(
+                                os.path.join(install_dir, 'launch.py'),
+                                'Telegram Manager',
+                                public_desktop
                             )
-                            stdout, stderr = process.communicate()
                             
-                            if process.returncode == 0:
-                                print("[DEBUG] Dependencies installed successfully")
-                                if stdout:
-                                    print("[DEBUG] pip output:", stdout)
+                            if shortcut_created:
+                                print("[DEBUG] The shortcut has been created on the desktop")
+                                success_msg += "\n- The shortcut has been created on the desktop"
                             else:
-                                error_msg = f"Failed to install dependencies (code {process.returncode})"
-                                print(f"[ERROR] {error_msg}")
-                                print("[ERROR] Error output:", stderr)
-                                self.root.after(0, messagebox.showwarning, 
-                                             "Warning", 
-                                             f"{error_msg}\n\nPlease manually install dependencies with the command :\npip install -r {requirements_path}")
-                        except Exception as e:
-                            error_msg = f"Error installing dependencies: {str(e)}"
-                            print(f"[ERROR] {error_msg}")
-                            self.root.after(0, messagebox.showerror, 
-                                         "Error", 
-                                         f"{error_msg}\n\nPlease manually install dependencies with the command :\npip install -r {requirements_path}")
-                    
-                    # Success message
-                    success_msg = f"Installation completed successfully in {install_dir}"
-                    print(f"[SUCCESS] {success_msg}")
-                    self.root.after(0, self.update_status, success_msg, 100)
-                    
-                    # Lancer l'application
-                    launch_path = os.path.join(install_dir, 'launch.py')
-                    if os.path.exists(launch_path):
-                        try:
-                            # Créer un raccourci sur le bureau si demandé
-                            if self.create_desktop_shortcut.get():
-                                try:
-                                    # Forcer l'utilisation du bureau public
-                                    public_desktop = os.path.join(os.environ.get('PUBLIC', ''), 'Desktop')
-                                    os.makedirs(public_desktop, exist_ok=True)  # Créer le dossier s'il n'existe pas
-                                    print(f"[DEBUG] Using public desktop: {public_desktop}")
-                                    
-                                    # Créer le raccourci
-                                    shortcut_created = self.create_shortcut(
-                                        os.path.join(install_dir, 'launch.py'),
-                                        'Telegram Manager',
-                                        public_desktop
-                                    )
-                                    
-                                    if shortcut_created:
-                                        print("[DEBUG] The shortcut has been created on the desktop")
-                                        success_msg += "\n- The shortcut has been created on the desktop"
-                                    else:
-                                        raise Exception("Failed to create the shortcut")
-                                        
-                                except Exception as e:
-                                    error_msg = f"[ERROR] Failed to create the shortcut on the desktop: {e}"
-                                    print(error_msg)
-                                    success_msg += "\n- Failed to create the shortcut on the desktop"
-                            
-                            # Create a shortcut in the Start Menu (always enabled)
-                            try:
-                                # Get the Start Menu path
-                                start_menu_path = self._get_start_menu_path()
-                                os.makedirs(start_menu_path, exist_ok=True)
-                                print(f"[DEBUG] Using Start Menu: {start_menu_path}")
+                                raise Exception("Failed to create the shortcut")
                                 
-                                # Create the shortcut in the Start Menu
-                                start_menu_shortcut_created = self.create_shortcut(
-                                    os.path.join(install_dir, 'launch.py'),
-                                    'Telegram Manager',
-                                    start_menu_path
-                                )
-                                
-                                if start_menu_shortcut_created:
-                                    print("[DEBUG] The shortcut has been created in the Start Menu")
-                                    success_msg += "\n- The shortcut has been created in the Start Menu"
-                                else:
-                                    print("[WARNING] Failed to create the shortcut in the Start Menu")
-                                    success_msg += "\n- Failed to create the shortcut in the Start Menu"
-                                    
-                            except Exception as e:
-                                error_msg = f"[WARNING] Error creating Start Menu shortcut: {e}"
-                                print(error_msg)
-                                success_msg += "\n- Failed to create the shortcut in the Start Menu"
-                            
-                            # Launch the application in the background
-                            setup_src_path = os.path.join(install_dir, 'setup', 'src')
-                            main_script = os.path.join(setup_src_path, 'main.py')
-                            if os.path.exists(main_script):
-                                subprocess.Popen(
-                                    [sys.executable, main_script],
-                                    cwd=setup_src_path,
-                                    creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
-                                    close_fds=True
-                                )
-                                print("[DEBUG] Application launched in the background successfully")
-                            else:
-                                print(f"[ERROR] Main file not found: {main_script}")
-                            print("[DEBUG] Application launched successfully")
-                            
-                            success_msg += "\n\nTelegram Manager has been launched automatically."
-                            
                         except Exception as e:
-                            error_msg = f"[ERROR] Failed to launch Telegram Manager: {e}"
+                            error_msg = f"[ERROR] Failed to create the shortcut on the desktop: {e}"
                             print(error_msg)
-                            success_msg += "\n\nFailed to launch Telegram Manager automatically. Please launch it manually by running 'launch.py' in the installation directory."
+                            success_msg += "\n- Failed to create the shortcut on the desktop"
+            
+                    # Create a shortcut in the Start Menu (always enabled)
+                    try:
+                        # Get the Start Menu path
+                        start_menu_path = self._get_start_menu_path()
+                        os.makedirs(start_menu_path, exist_ok=True)
+                        print(f"[DEBUG] Using Start Menu: {start_menu_path}")
+                        
+                        # Create the shortcut in the Start Menu
+                        start_menu_shortcut_created = self.create_shortcut(
+                            os.path.join(install_dir, 'launch.py'),
+                            'Telegram Manager',
+                            start_menu_path
+                        )
+                        
+                        if start_menu_shortcut_created:
+                            print("[DEBUG] The shortcut has been created in the Start Menu")
+                            success_msg += "\n- The shortcut has been created in the Start Menu"
+                        else:
+                            print("[WARNING] Failed to create the shortcut in the Start Menu")
+                            success_msg += "\n- Failed to create the shortcut in the Start Menu"
+                            
+                    except Exception as e:
+                        error_msg = f"[WARNING] Error creating Start Menu shortcut: {e}"
+                        print(error_msg)
+                        success_msg += "\n- Failed to create the shortcut in the Start Menu"
+                        
+                    # Launch the application in the background
+                    setup_src_path = os.path.join(install_dir, 'setup', 'src')
+                    main_script = os.path.join(setup_src_path, 'main.py')
+                    if os.path.exists(main_script):
+                        subprocess.Popen(
+                            [sys.executable, main_script],
+                            cwd=setup_src_path,
+                            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
+                            close_fds=True
+                        )
+                        print("[DEBUG] Application launched in the background successfully")
+                    else:
+                        print(f"[ERROR] Main file not found: {main_script}")
+                    print("[DEBUG] Application launched successfully")
                     
-                    self.root.after(0, messagebox.showinfo, "Installation successful", success_msg)
+                    success_msg += "\n\nTelegram Manager has been launched automatically."
+                    
+                except Exception as e:
+                    error_msg = f"[ERROR] Failed to launch Telegram Manager: {e}"
+                    print(error_msg)
+                    success_msg += "\n\nFailed to launch Telegram Manager automatically. Please launch it manually by running 'launch.py' in the installation directory."
+            
+                self.root.after(0, messagebox.showinfo, "Installation successful", success_msg)
                 return
                 
             # Mettre à jour le statut de l'installation
