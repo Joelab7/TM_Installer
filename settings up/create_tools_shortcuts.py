@@ -25,6 +25,19 @@ class ProjectShortcutCreator:
         
     def find_batch_files(self):
         """Cherche dynamiquement les fichiers batch avec plusieurs noms possibles."""
+        print(f"[DEBUG] Recherche dans le dossier: {self.settings_dir}")
+        print(f"[DEBUG] Contenu du dossier settings:")
+        
+        # Lister tous les fichiers pour le débogage
+        try:
+            for item in self.settings_dir.iterdir():
+                if item.is_file():
+                    print(f"[DEBUG]   Fichier: {item.name}")
+                elif item.is_dir():
+                    print(f"[DEBUG]   Dossier: {item.name}")
+        except Exception as e:
+            print(f"[ERROR] Impossible de lister le dossier: {e}")
+        
         possible_pairs = [
             ("install.bat", "uninstall.bat"),
             ("install.exe", "uninstall.exe"),
@@ -36,6 +49,9 @@ class ProjectShortcutCreator:
             install_path = self.settings_dir / install_name
             uninstall_path = self.settings_dir / uninstall_name
             
+            print(f"[DEBUG] Test: {install_name} -> {install_path.exists()}")
+            print(f"[DEBUG] Test: {uninstall_name} -> {uninstall_path.exists()}")
+            
             if install_path.exists() and uninstall_path.exists():
                 print(f"[INFO] Fichiers trouvés: {install_name}, {uninstall_name}")
                 return install_path, uninstall_path
@@ -43,6 +59,9 @@ class ProjectShortcutCreator:
         # Si aucun pair trouvé, chercher individuellement
         install_files = list(self.settings_dir.glob("install*.bat")) + list(self.settings_dir.glob("install*.exe"))
         uninstall_files = list(self.settings_dir.glob("uninstall*.bat")) + list(self.settings_dir.glob("uninstall*.exe"))
+        
+        print(f"[DEBUG] Fichiers install trouvés individuellement: {[f.name for f in install_files]}")
+        print(f"[DEBUG] Fichiers uninstall trouvés individuellement: {[f.name for f in uninstall_files]}")
         
         if install_files and uninstall_files:
             return install_files[0], uninstall_files[0]
@@ -102,7 +121,7 @@ cd /d "%~dp0"
 
 rem Chercher dans le répertoire courant (settings up)
 if exist "{target_filename}" (
-    echo Fichier trouvé dans le répertoire courant
+    echo Fichier trouvé dans le répertoire courant: %cd%\\{target_filename}
     "{target_filename}"
     goto :end
 )
@@ -120,19 +139,22 @@ for /d %%d in (*) do (
 rem Chercher dans le répertoire parent
 cd ..
 if exist "{target_filename}" (
-    echo Fichier trouvé dans le répertoire parent
+    echo Fichier trouvé dans le répertoire parent: %cd%\\{target_filename}
     "{target_filename}"
     goto :end
 )
 
 rem Chercher récursivement depuis le répertoire parent
 for /r %%f in ({target_filename}) do (
-    echo Fichier trouvé: %%f
+    echo Fichier trouvé recursivement: %%f
     start "" "%%f"
     goto :end
 )
 
 echo Erreur: Fichier {target_filename} introuvable
+echo Répertoire actuel: %cd%
+echo Contenu du répertoire:
+dir /b
 pause
 
 :end
@@ -156,9 +178,20 @@ endlocal
                     shortcut.IconLocation = f"{os.path.abspath(icon_path)},0"
                     print(f"[INFO] Icône appliquée: {icon_path}")
                 else:
-                    # Utiliser l'icône par défaut du système
-                    shortcut.IconLocation = sys.executable
-                    print(f"[INFO] Icône par défaut utilisée")
+                    # Utiliser une icône système par défaut
+                    system_icons = [
+                        r"C:\Windows\System32\shell32.dll,0",  # Dossier
+                        r"C:\Windows\System32\imageres.dll,0",  # Image
+                        r"C:\Windows\System32\imageres.dll,102", # Paramètres
+                        sys.executable  # Python
+                    ]
+                    for icon in system_icons:
+                        try:
+                            shortcut.IconLocation = icon
+                            print(f"[INFO] Icône système utilisée: {icon}")
+                            break
+                        except:
+                            continue
                 
                 # Sauvegarder le raccourci
                 shortcut.save()
