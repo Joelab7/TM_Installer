@@ -100,7 +100,7 @@ setlocal enabledelayedexpansion
 echo Recherche du fichier {target_filename}...
 cd /d "%~dp0"
 
-rem Chercher dans le répertoire courant
+rem Chercher dans le répertoire courant (settings up)
 if exist "{target_filename}" (
     echo Fichier trouvé dans le répertoire courant
     "{target_filename}"
@@ -117,7 +117,15 @@ for /d %%d in (*) do (
     )
 )
 
-rem Chercher récursivement
+rem Chercher dans le répertoire parent
+cd ..
+if exist "{target_filename}" (
+    echo Fichier trouvé dans le répertoire parent
+    "{target_filename}"
+    goto :end
+)
+
+rem Chercher récursivement depuis le répertoire parent
 for /r %%f in ({target_filename}) do (
     echo Fichier trouvé: %%f
     start "" "%%f"
@@ -131,16 +139,16 @@ pause
 endlocal
 """
                 
-                # Créer le script batch portable
+                # Créer le script batch portable dans le dossier settings up
                 batch_filename = f"run_{shortcut_name.replace(' ', '_')}.bat"
-                batch_path = os.path.join(shortcut_dir, batch_filename)
+                batch_path = os.path.join(str(self.settings_dir), batch_filename)
                 
                 with open(batch_path, 'w', encoding='utf-8') as f:
                     f.write(batch_content)
                 
                 # Configurer le raccourci pour pointer vers le script batch
                 shortcut.TargetPath = batch_path
-                shortcut.WorkingDirectory = shortcut_dir
+                shortcut.WorkingDirectory = str(self.settings_dir)
                 shortcut.WindowStyle = 1  # 1 = Normal
                 
                 # Ajouter l'icône si spécifiée
