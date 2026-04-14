@@ -513,9 +513,9 @@ class InstallerApp:
                 messagebox.showerror("Extraction Error", error_msg)
                 return False
             except Exception as e:
-                error_msg = f"Error extracting ZIP file: {e}"
+                error_msg = f"Failed to extract files: {e}"
                 print(f"[ERROR] {error_msg}")
-                messagebox.showerror("Extraction Error", error_msg)
+                messagebox.showerror("Extraction failed", error_msg)
                 return False
             
             # Vérifier que les fichiers ont été extraits
@@ -636,10 +636,10 @@ class InstallerApp:
             # Extraire depuis PACK
             print(f"[DEBUG] Calling extract_from_pack with install_dir={install_dir}")
             if not self.extract_from_pack(install_dir):
-                error_msg = "Failed to extract files from PACK directory"
+                error_msg = "Failed to extract files from PACK directory\n\n⚠️ Please uninstall the existing application before installing this version !"
                 print(f"[ERROR] {error_msg}")
                 self.root.after(0, self.update_status, error_msg, 0)
-                self.root.after(0, messagebox.showerror, "Installation Error", error_msg)
+                self.root.after(0, messagebox.showerror, "Installation failed", error_msg)
             else:
                 print(f"[DEBUG] File extraction completed successfully in {install_dir}")
                 install_dir = self.install_dir.get()
